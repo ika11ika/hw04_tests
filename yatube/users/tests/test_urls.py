@@ -33,7 +33,6 @@ class PostsURLTests(TestCase):
         }
 
         self.access_authorised_names = {
-            reverse('users:logout'): 'users/logged_out.html',
             reverse('users:password_change'):
             'users/password_change_form.html',
             reverse('users:password_change_done'):
@@ -59,12 +58,12 @@ class PostsURLTests(TestCase):
         for url in self.access_authorised_names:
             with self.subTest(url=url):
                 response = self.authorized_client.get(url)
-                self.assertEqual(response.status_code, HTTPStatus.FOUND)
+                self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_authorised_logout(self):
-        """Редирект после выхода из ЛК"""
+        """Доступность страницы выхода из ЛК"""
         response = self.authorized_client.get(reverse('users:logout'))
-        self.assertRedirects(response, '/')
+        self.assertTemplateUsed(response, 'users/logged_out.html')
 
     def test_authorised_password_change_done(self):
         """Доступность страницы успешной смены пароля"""
