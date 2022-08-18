@@ -43,10 +43,10 @@ class PostsURLTests(TestCase):
                     kwargs={'slug': self.group.slug}): 'posts/group_list.html',
             reverse('posts:profile',
                     kwargs={'username': self.post.author.username}):
-                    'posts/profile.html',
+            'posts/profile.html',
             reverse('posts:post_detail',
                     kwargs={'post_id': self.post.pk}):
-                    'posts/post_detail.html',
+            'posts/post_detail.html',
         }
 
     def test_access(self):
