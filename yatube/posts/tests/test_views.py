@@ -22,19 +22,12 @@ class PostsViewsTests(TestCase):
         )
 
         cls.author_user = User.objects.create_user(username='hasNoName')
-
-        cls.posts = [
-            Post.objects.create(
-                text='Тестовый текст ' + str(i),
-                pub_date='Тестовая дата ' + str(i),
-                author=PostsViewsTests.author_user,
-                group=PostsViewsTests.group
-            )
-            for i in range(POSTS_PER_PAGE)
-        ]
-
-        cls.post = PostsViewsTests.posts[0]
-        cls.paginate_obj = PaginatorViewsTest()
+        cls.post = Post.objects.create(
+            text='Тестовый текст',
+            pub_date='Тестовая дата',
+            author=PostsViewsTests.author_user,
+            group=PostsViewsTests.group
+        )
 
     def setUp(self):
         self.guest_client = Client()
@@ -46,9 +39,6 @@ class PostsViewsTests(TestCase):
             with self.subTest(value=value):
                 form_field = response.context.get(value)
                 self.assertIsInstance(form_field, expected)
-
-    def check_post_after_create_with_group(self, response):
-        self.assertTrue(self.post in response.context['page_obj'])
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -84,21 +74,6 @@ class PostsViewsTests(TestCase):
         form_field = response.context.get('page_obj')
         self.assertIsInstance(form_field, Page)
 
-        """
-        В тестах страниц index, group_list и profile помимо проверки контекста
-        вставила вызовы методов проверки на паджинатор и на отображение
-        поста после создания.
-        С одной стороны тесты стали проверять больше заявленного,
-        с другой - не дублируется очень большое количество кода.
-        Так и не смогла решить, что лучше.
-        """
-
-        PostsViewsTests.paginate_obj.page_contain_ten_records(
-            response=response
-        )
-
-        self.check_post_after_create_with_group(response=response)
-
     def test_group_list_show_correct_context(self):
         """Корректные данные в контексте страницы повтов группы"""
         response = self.authorized_client.get(
@@ -112,14 +87,8 @@ class PostsViewsTests(TestCase):
 
         self.check_form_fields_list(response, form_fields)
 
-        PostsViewsTests.paginate_obj.page_contain_ten_records(
-            response=response
-        )
-
-        self.check_post_after_create_with_group(response=response)
-
     def test_profile_show_correct_context(self):
-        """Корректные данные в контексте страницы повтов автора"""
+        """Корректные данные в контексте страницы постов автора"""
         response = self.authorized_client.get(
             reverse('posts:profile',
                     kwargs={'username': PostsViewsTests.post.author})
@@ -131,12 +100,6 @@ class PostsViewsTests(TestCase):
         }
 
         self.check_form_fields_list(response, form_fields)
-
-        PostsViewsTests.paginate_obj.page_contain_ten_records(
-            response=response
-        )
-
-        self.check_post_after_create_with_group(response=response)
 
     def test_post_detail_show_correct_context(self):
         """Корректные данные в контексте страницы поста"""
@@ -188,8 +151,85 @@ class PostsViewsTests(TestCase):
         )
         self.assertTrue(self.post not in response.context['page_obj'])
 
+    def test_post_appeared_on_pages_after_create(self):
+        """Созданный пост появился на всех нужных страницах"""
+        pages = {
+            'index': self.authorized_client.get(reverse('posts:index')),
+            'group_list': self.authorized_client.get(
+                reverse('posts:group_list',
+                        kwargs={'slug': PostsViewsTests.group.slug})
+            ),
+            'profile': self.authorized_client.get(
+                reverse('posts:profile',
+                        kwargs={'username': PostsViewsTests.post.author})
+            )
+        }
+        for _, response in pages.items():
+            with self.subTest(response=response):
+                self.assertTrue(self.post in response.context['page_obj'])
+
 
 class PaginatorViewsTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.group = Group.objects.create(
+            description='Описание',
+            title='Имя',
+            slug='test-slug'
+        )
+
+        cls.author_user = User.objects.create_user(username='hasNoName')
+        posts_list = [
+            Post(
+                text='Тест. текст ' + str(i),
+                pub_date='Тестовая дата ' + str(i),
+                author=PaginatorViewsTest.author_user,
+                group=PaginatorViewsTest.group
+            )
+            for i in range(POSTS_PER_PAGE)
+        ]
+        Post.objects.bulk_create(posts_list)
+        """
+        Везде в примерах по bulk_create в переменную записывают набор объектов,
+        возвращаемый этим методом, но у меня так сделать не вышло, так как
+        слетают все те тесты, которым нужен post.pk.
+        Пришлось дополнительным запросом забирать посты с pk из базы,
+        не уверена, что так и надо, зато так мы получили pk.
+        """
+        cls.posts = Post.objects.all()
+        cls.post = PaginatorViewsTest.posts[0]
+
+    def setUp(self):
+        self.guest_client = Client()
+
     def page_contain_ten_records(self, response):
         """На странице доступно заданное число постов"""
         self.assertEqual(len(response.context['page_obj']), POSTS_PER_PAGE)
+
+    def test_index_pagination(self):
+        """Правильная пагинация на главной странице"""
+        response = self.guest_client.get(reverse('posts:index'))
+        self.page_contain_ten_records(
+            response=response
+        )
+
+    def test_group_list_pagination(self):
+        """Правильная пагинация на странице группы"""
+        response = self.guest_client.get(
+            reverse('posts:group_list',
+                    kwargs={'slug': PaginatorViewsTest.group.slug})
+        )
+        self.page_contain_ten_records(
+            response=response
+        )
+
+    def test_profile_pagination(self):
+        """Правильная пагинация на странице пользователя"""
+        response = self.guest_client.get(
+            reverse('posts:profile',
+                    kwargs={'username': PaginatorViewsTest.post.author})
+        )
+        self.page_contain_ten_records(
+            response=response
+        )

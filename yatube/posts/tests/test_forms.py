@@ -47,10 +47,18 @@ class PostCreateFormTests(TestCase):
         self.assertEqual(Post.objects.count(), posts_count + 1)
         self.assertTrue(
             Post.objects.filter(
-                text='Я не люблю тестирование!',
+                text=form_data['text'],
                 author=PostCreateFormTests.author_user,
-                group=PostCreateFormTests.group
+                group=form_data['group']
             ).exists()
+        )
+        self.assertTrue(
+            Post.objects.latest('pub_date') in 
+            Post.objects.filter(
+                text=form_data['text'],
+                author=PostCreateFormTests.author_user,
+                group=form_data['group']
+            )
         )
 
 
@@ -114,7 +122,7 @@ class PostEditFormTests(TestCase):
         self.assertEqual(Post.objects.count(), posts_count)
         self.assertTrue(
             Post.objects.filter(
-                text='Я терпеть не могу тестирование!',
+                text=form_data['text'],
                 author=PostEditFormTests.author_user,
                 group=fake_group
             ).exists()
