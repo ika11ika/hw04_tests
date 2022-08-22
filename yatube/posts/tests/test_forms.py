@@ -53,7 +53,7 @@ class PostCreateFormTests(TestCase):
             ).exists()
         )
         self.assertTrue(
-            Post.objects.latest('pub_date') in 
+            Post.objects.latest('pub_date') in
             Post.objects.filter(
                 text=form_data['text'],
                 author=PostCreateFormTests.author_user,
