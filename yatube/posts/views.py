@@ -1,12 +1,14 @@
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render, redirect
+from django.views.decorators.cache import cache_page
 from .models import Post, Group, User
-from .forms import PostForm
+from .forms import PostForm, CommentForm
 
 POSTS_AMOUNT = 10
 
 
+@cache_page(20, key_prefix="index_page")
 def index(request):
     posts = Post.objects.all()
     page_obj = paginate_posts(request, posts)
@@ -64,6 +66,8 @@ def post_detail(request, post_id):
     post_pub_date = post.pub_date
     author = post.author
     author_posts_amount = author.posts.all().count()
+    comment_form = CommentForm(request.POST or None)
+    post_comments = post.comments.all()
 
     context = {
         "post": post,
@@ -71,6 +75,8 @@ def post_detail(request, post_id):
         "pub_date": post_pub_date,
         "author": author,
         "author_posts_amount": author_posts_amount,
+        "comment_form": comment_form,
+        "comments": post_comments,
     }
 
     return render(request, template, context)
@@ -80,7 +86,9 @@ def post_detail(request, post_id):
 def post_create(request):
 
     template = "posts/create_post.html"
-    form = PostForm(request.POST or None)
+    form = PostForm(
+        request.POST or None,
+        files=request.FILES or None)
 
     if request.method == 'POST':
         if form.is_valid():
@@ -103,7 +111,11 @@ def post_edit(request, post_id):
     is_edit = True
     post = get_object_or_404(Post, pk=post_id)
     author = post.author
-    form = PostForm(request.POST or None, instance=post)
+    form = PostForm(
+        request.POST or None,
+        files=request.FILES or None,
+        instance=post
+    )
 
     if request.user == author:
         if request.method == "POST" and form.is_valid:
@@ -117,3 +129,15 @@ def post_edit(request, post_id):
 
         return render(request, template, context)
     return redirect("posts:post_detail", post_id)
+
+
+@login_required
+def add_comment(request, post_id):
+    post = get_object_or_404(Post, pk=post_id)
+    form = CommentForm(request.POST or None)
+    if form.is_valid():
+        comment = form.save(commit=False)
+        comment.author = request.user
+        comment.post = post
+        comment.save()
+    return redirect('posts:post_detail', post_id=post_id)
